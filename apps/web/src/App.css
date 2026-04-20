@@ -1,0 +1,148 @@
+.page {
+  min-height: 100vh;
+  padding: 3.5rem 1.25rem 4rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hero {
+  margin-bottom: 1.5rem;
+}
+
+.tag {
+  display: inline-block;
+  margin: 0;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(201, 83, 0, 0.18);
+  color: #9f3500;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+h1 {
+  margin: 1rem 0 0.8rem;
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  line-height: 1;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 70ch;
+  color: #524329;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  background: rgba(255, 247, 232, 0.85);
+  border: 1px solid rgba(188, 124, 43, 0.35);
+  box-shadow: 0 15px 35px rgba(129, 86, 20, 0.08);
+  border-radius: 20px;
+  padding: 1.25rem;
+  backdrop-filter: blur(4px);
+}
+
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
+h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1.25rem;
+}
+
+h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+p {
+  margin: 0;
+}
+
+ul {
+  margin: 0.9rem 0 0;
+  padding-left: 1.1rem;
+}
+
+li + li {
+  margin-top: 0.45rem;
+}
+
+.actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-weight: 600;
+  background: #1e5631;
+  color: #fffcf4;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 180ms ease;
+}
+
+button:hover:enabled {
+  transform: translateY(-1px);
+  filter: brightness(1.07);
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.secondary {
+  background: #f6e7c9;
+  color: #3a2a12;
+  border-color: #cfb277;
+}
+
+.status {
+  margin-top: 0.85rem;
+  color: #153827;
+  font-weight: 600;
+}
+
+.error {
+  margin-top: 0.5rem;
+  color: #962600;
+  font-weight: 600;
+}
+
+.columns {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.columns > div {
+  border: 1px solid rgba(188, 124, 43, 0.25);
+  border-radius: 14px;
+  padding: 0.85rem;
+  background: rgba(255, 251, 244, 0.8);
+}
+
+@media (max-width: 900px) {
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}

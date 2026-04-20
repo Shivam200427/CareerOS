@@ -1,0 +1,30 @@
+{
+  "name": "carreros",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w apps/api\" \"npm run dev -w apps/worker\" \"npm run dev -w apps/web\"",
+    "build": "npm run build -w apps/web && npm run build -w apps/api && npm run build -w apps/worker",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/worker && npm run typecheck -w apps/web",
+    "lint": "npm run lint -w apps/web"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shivam200427/CareerOS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Shivam200427/CareerOS/issues"
+  },
+  "homepage": "https://github.com/Shivam200427/CareerOS#readme",
+  "description": "",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
