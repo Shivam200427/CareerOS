@@ -1,13 +1,13 @@
 # CareerOS / JobAgent
 
-Milestone C baseline for the JobAgent platform.
+Milestone D baseline for the JobAgent platform.
 
 ## Milestone status
 
 - Milestone A: complete
 - Milestone B (Resume Vault): complete
 - Milestone C (Manual Job Intake + Queue): complete
-- Milestone D: next
+- Milestone D (Human Approval Gate): in progress
 
 ## What is included
 
@@ -74,9 +74,15 @@ npm run dev
 - `POST /api/jobs/manual` (auth required, JSON body: `{ "url": "..." }`)
 - `GET /api/jobs/discover` (auth required, placeholder)
 
+## API endpoints in Milestone D
+
+- `POST /api/jobs/:jobId/approve` (auth required)
+- `POST /api/jobs/:jobId/skip` (auth required)
+
 Resume upload supports `.pdf`, `.doc`, `.docx`, and `.txt` files up to 5 MB.
 Parsed metadata is persisted locally in `data/resumes/store.json` for development.
 Manual job intake stores parsed entries and processing status in `data/jobs/store.json`.
+Approval-gate statuses now include `awaiting_approval`, `approved`, `skipped`, and `completed`.
 
 ## Scripts
 
@@ -87,4 +93,4 @@ Manual job intake stores parsed entries and processing status in `data/jobs/stor
 
 ## Next milestone
 
-Milestone D will add human-in-the-loop Playwright apply flow.
+Milestone D next step is Playwright form execution after the approval gate.

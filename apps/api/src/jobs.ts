@@ -20,7 +20,14 @@ type ResumeStore = {
   }>;
 };
 
-export type JobStatus = "queued" | "processing" | "completed" | "failed";
+export type JobStatus =
+  | "queued"
+  | "processing"
+  | "awaiting_approval"
+  | "approved"
+  | "completed"
+  | "skipped"
+  | "failed";
 
 export type JobRecord = {
   id: string;
@@ -42,6 +49,8 @@ export type JobRecord = {
 type JobStore = {
   jobs: JobRecord[];
 };
+
+type QueueJobName = "manual-job-intake" | "manual-job-submit";
 
 const manualJobSchema = z.object({
   url: z.url(),
@@ -70,6 +79,27 @@ async function readJobStore(): Promise<JobStore> {
   await ensureStoreReady();
   const raw = await fs.readFile(jobsDbPath, "utf-8");
   return JSON.parse(raw) as JobStore;
+}
+
+async function updateJobRecord(
+  jobId: string,
+  userId: string,
+  updater: (job: JobRecord) => JobRecord,
+) {
+  const store = await readJobStore();
+  const index = store.jobs.findIndex((job) => job.id === jobId && job.userId === userId);
+  if (index === -1) {
+    return null;
+  }
+
+  const updated = updater(store.jobs[index]);
+  store.jobs[index] = {
+    ...updated,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeJobStore(store);
+  return store.jobs[index];
 }
 
 function writeJobStore(store: JobStore) {
@@ -230,15 +260,21 @@ export async function postManualJob(req: AuthenticatedRequest, res: Response) {
   store.jobs.push(record);
   await writeJobStore(store);
 
+  await enqueueJob("manual-job-intake", record.id, record.userId, record.url);
+
+  res.status(201).json({ job: record, queued: true });
+}
+
+async function enqueueJob(name: QueueJobName, jobId: string, userId: string, url: string) {
   await queue.add(
-    "manual-job-intake",
+    name,
     {
-      jobId: record.id,
-      userId: record.userId,
-      url: record.url,
+      jobId,
+      userId,
+      url,
     },
     {
-      jobId: record.id,
+      jobId: `${jobId}:${name}`,
       attempts: 3,
       backoff: {
         type: "exponential",
@@ -248,8 +284,6 @@ export async function postManualJob(req: AuthenticatedRequest, res: Response) {
       removeOnFail: 200,
     },
   );
-
-  res.status(201).json({ job: record, queued: true });
 }
 
 export async function getJobs(req: AuthenticatedRequest, res: Response) {
@@ -270,4 +304,87 @@ export async function getDiscoverJobsPlaceholder(_req: AuthenticatedRequest, res
   res.status(501).json({
     message: "Auto-discovery is planned for a later milestone. Use POST /api/jobs/manual for now.",
   });
+}
+
+export async function postApproveJob(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const user = req.user;
+  const jobId = String(req.params.jobId ?? "");
+  if (!jobId) {
+    res.status(400).json({ message: "Missing job id" });
+    return;
+  }
+
+  const store = await readJobStore();
+  const current = store.jobs.find((job) => job.id === jobId && job.userId === user.id);
+  if (!current) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  if (current.status !== "awaiting_approval") {
+    res.status(400).json({ message: "Only jobs awaiting approval can be approved" });
+    return;
+  }
+
+  const updated = await updateJobRecord(jobId, user.id, (job) => {
+    return {
+      ...job,
+      status: "approved",
+      lastError: undefined,
+    };
+  });
+
+  if (!updated) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  await enqueueJob("manual-job-submit", updated.id, updated.userId, updated.url);
+
+  res.json({ job: updated, queued: true });
+}
+
+export async function postSkipJob(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const user = req.user;
+  const jobId = String(req.params.jobId ?? "");
+  if (!jobId) {
+    res.status(400).json({ message: "Missing job id" });
+    return;
+  }
+
+  const store = await readJobStore();
+  const current = store.jobs.find((job) => job.id === jobId && job.userId === user.id);
+  if (!current) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  if (current.status !== "awaiting_approval") {
+    res.status(400).json({ message: "Only jobs awaiting approval can be skipped" });
+    return;
+  }
+
+  const updated = await updateJobRecord(jobId, user.id, (job) => {
+    return {
+      ...job,
+      status: "skipped",
+    };
+  });
+
+  if (!updated) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  res.json({ job: updated });
 }

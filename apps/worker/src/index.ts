@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { Redis } from "ioredis";
 import { env } from "./env.js";
 
-type JobStatus = "queued" | "processing" | "completed" | "failed";
+type JobStatus =
+  | "queued"
+  | "processing"
+  | "awaiting_approval"
+  | "approved"
+  | "completed"
+  | "skipped"
+  | "failed";
 
 type JobStore = {
   jobs: Array<{
@@ -35,6 +42,10 @@ async function ensureStoreReady() {
 }
 
 async function updateJobStatus(jobId: string, status: JobStatus, lastError?: string) {
+  if (!jobId) {
+    return;
+  }
+
   await ensureStoreReady();
   const raw = await fs.readFile(jobsDbPath, "utf-8");
   const store = JSON.parse(raw) as JobStore;
@@ -56,19 +67,24 @@ async function updateJobStatus(jobId: string, status: JobStatus, lastError?: str
 const worker = new Worker(
   env.JOB_QUEUE_NAME,
   async (job) => {
+    const baseJobId = String(job.data?.jobId ?? "");
     console.log(`Processing job ${job.id}`, job.name, job.data);
 
-    await updateJobStatus(String(job.id), "processing");
+    await updateJobStatus(baseJobId, "processing");
 
     await new Promise((resolve) => {
       setTimeout(resolve, 900);
     });
 
-    await updateJobStatus(String(job.id), "completed");
+    if (job.name === "manual-job-intake") {
+      await updateJobStatus(baseJobId, "awaiting_approval");
+    } else {
+      await updateJobStatus(baseJobId, "completed");
+    }
 
     return {
       processedAt: new Date().toISOString(),
-      status: "parsed-and-queued-for-agent",
+      status: job.name === "manual-job-intake" ? "awaiting-approval" : "submitted",
     };
   },
   { connection },
@@ -82,9 +98,10 @@ worker.on("completed", (job) => {
 
 worker.on("failed", (job, error) => {
   console.error(`Job ${job?.id} failed`, error.message);
-  if (job?.id) {
-    updateJobStatus(String(job.id), "failed", error.message).catch(() => {
-      console.error(`Unable to persist failed status for job ${job.id}`);
+  const baseJobId = String(job?.data?.jobId ?? "");
+  if (baseJobId) {
+    updateJobStatus(baseJobId, "failed", error.message).catch(() => {
+      console.error(`Unable to persist failed status for job ${baseJobId}`);
     });
   }
 });

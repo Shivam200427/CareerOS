@@ -31,7 +31,14 @@ type ResumeRecord = {
 type JobRecord = {
   id: string;
   url: string;
-  status: "queued" | "processing" | "completed" | "failed";
+  status:
+    | "queued"
+    | "processing"
+    | "awaiting_approval"
+    | "approved"
+    | "completed"
+    | "skipped"
+    | "failed";
   title: string;
   company: string;
   summary: string;
@@ -252,6 +259,60 @@ function App() {
     }
   }
 
+  async function approveJob(jobId: string) {
+    if (!headers) {
+      setError("Sign in first to approve queued jobs.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/${jobId}/approve`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to approve this job");
+      }
+
+      setStatus("Job approved and queued for submission stage");
+      await fetchJobs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
+  async function skipJob(jobId: string) {
+    if (!headers) {
+      setError("Sign in first to skip queued jobs.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/${jobId}/skip`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to skip this job");
+      }
+
+      setStatus("Job skipped from approval queue");
+      await fetchJobs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
@@ -378,6 +439,16 @@ function App() {
                   <p>
                     Updated: {new Date(job.updatedAt).toLocaleString()} | Retries: {job.retries}
                   </p>
+                  {job.status === "awaiting_approval" ? (
+                    <div className="actions">
+                      <button disabled={jobsBusy} onClick={() => approveJob(job.id)}>
+                        Approve Submit
+                      </button>
+                      <button className="secondary" disabled={jobsBusy} onClick={() => skipJob(job.id)}>
+                        Skip
+                      </button>
+                    </div>
+                  ) : null}
                   {job.lastError ? <p className="error">Last error: {job.lastError}</p> : null}
                   <a href={job.url} target="_blank" rel="noreferrer" className="job-link">
                     Open listing
@@ -401,7 +472,7 @@ function App() {
             </div>
             <div>
               <h3>Milestone D</h3>
-              <p>Human-in-loop Playwright apply flow with approval gate.</p>
+              <p>In progress: human approval gate before submit is live in queue workflow.</p>
             </div>
           </div>
         </article>

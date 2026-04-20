@@ -216,9 +216,24 @@ button:disabled {
   color: #0f4a78;
 }
 
+.badge-awaiting_approval {
+  background: #ffe8ba;
+  color: #764300;
+}
+
+.badge-approved {
+  background: #dbe8ff;
+  color: #123b85;
+}
+
 .badge-completed {
   background: #cfeeda;
   color: #154529;
+}
+
+.badge-skipped {
+  background: #efefef;
+  color: #4a4a4a;
 }
 
 .badge-failed {
