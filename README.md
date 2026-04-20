@@ -7,7 +7,7 @@ Milestone D baseline for the JobAgent platform.
 - Milestone A: complete
 - Milestone B (Resume Vault): complete
 - Milestone C (Manual Job Intake + Queue): complete
-- Milestone D (Human Approval Gate): in progress
+- Milestone D (Human Approval Gate + Apply Execution): in progress
 
 ## What is included
 
@@ -83,6 +83,10 @@ Resume upload supports `.pdf`, `.doc`, `.docx`, and `.txt` files up to 5 MB.
 Parsed metadata is persisted locally in `data/resumes/store.json` for development.
 Manual job intake stores parsed entries and processing status in `data/jobs/store.json`.
 Approval-gate statuses now include `awaiting_approval`, `approved`, `skipped`, and `completed`.
+When a job is approved, the worker runs a submit-stage agent:
+
+- Simulated mode by default (writes JSON artifact)
+- Playwright mode when enabled (captures page title + screenshot)
 
 ## Scripts
 
@@ -93,4 +97,19 @@ Approval-gate statuses now include `awaiting_approval`, `approved`, `skipped`, a
 
 ## Next milestone
 
-Milestone D next step is Playwright form execution after the approval gate.
+Milestone D next step is expanding Playwright from page capture to full form interaction.
+
+## Playwright notes
+
+Set these variables in `.env`:
+
+```env
+PLAYWRIGHT_ENABLED=true
+AGENT_ARTIFACTS_DIR=data/agent-runs
+```
+
+Install browsers if needed:
+
+```bash
+npx playwright install chromium
+```

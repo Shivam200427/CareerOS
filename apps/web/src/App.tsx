@@ -46,6 +46,11 @@ type JobRecord = {
   matchScore: number;
   retries: number;
   lastError?: string;
+  agentResult?: {
+    mode: "playwright" | "simulated";
+    title?: string;
+    screenshotPath?: string;
+  };
   updatedAt: string;
 };
 
@@ -439,6 +444,12 @@ function App() {
                   <p>
                     Updated: {new Date(job.updatedAt).toLocaleString()} | Retries: {job.retries}
                   </p>
+                  {job.agentResult ? (
+                    <p>
+                      Agent mode: {job.agentResult.mode}
+                      {job.agentResult.title ? ` | Page: ${job.agentResult.title}` : ""}
+                    </p>
+                  ) : null}
                   {job.status === "awaiting_approval" ? (
                     <div className="actions">
                       <button disabled={jobsBusy} onClick={() => approveJob(job.id)}>
@@ -450,6 +461,9 @@ function App() {
                     </div>
                   ) : null}
                   {job.lastError ? <p className="error">Last error: {job.lastError}</p> : null}
+                  {job.agentResult?.screenshotPath ? (
+                    <p>Artifact: {job.agentResult.screenshotPath}</p>
+                  ) : null}
                   <a href={job.url} target="_blank" rel="noreferrer" className="job-link">
                     Open listing
                   </a>

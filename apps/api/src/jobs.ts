@@ -42,6 +42,11 @@ export type JobRecord = {
   matchScore: number;
   retries: number;
   lastError?: string;
+  agentResult?: {
+    mode: "playwright" | "simulated";
+    title?: string;
+    screenshotPath?: string;
+  };
   createdAt: string;
   updatedAt: string;
 };

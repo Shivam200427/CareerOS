@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Redis } from "ioredis";
+import { runApplyAgent } from "./apply-agent.js";
 import { env } from "./env.js";
 
 type JobStatus =
@@ -20,6 +21,11 @@ type JobStore = {
     status: JobStatus;
     retries: number;
     lastError?: string;
+    agentResult?: {
+      mode: "playwright" | "simulated";
+      title?: string;
+      screenshotPath?: string;
+    };
     updatedAt: string;
   }>;
 };
@@ -64,6 +70,31 @@ async function updateJobStatus(jobId: string, status: JobStatus, lastError?: str
   await fs.writeFile(jobsDbPath, JSON.stringify(store, null, 2), "utf-8");
 }
 
+async function saveAgentResult(
+  jobId: string,
+  result: {
+    mode: "playwright" | "simulated";
+    title?: string;
+    screenshotPath?: string;
+  },
+) {
+  if (!jobId) {
+    return;
+  }
+
+  await ensureStoreReady();
+  const raw = await fs.readFile(jobsDbPath, "utf-8");
+  const store = JSON.parse(raw) as JobStore;
+  const job = store.jobs.find((item) => item.id === jobId);
+  if (!job) {
+    return;
+  }
+
+  job.agentResult = result;
+  job.updatedAt = new Date().toISOString();
+  await fs.writeFile(jobsDbPath, JSON.stringify(store, null, 2), "utf-8");
+}
+
 const worker = new Worker(
   env.JOB_QUEUE_NAME,
   async (job) => {
@@ -79,6 +110,14 @@ const worker = new Worker(
     if (job.name === "manual-job-intake") {
       await updateJobStatus(baseJobId, "awaiting_approval");
     } else {
+      const result = await runApplyAgent({
+        jobId: baseJobId,
+        url: String(job.data?.url ?? ""),
+        enabled: env.PLAYWRIGHT_ENABLED,
+        artifactsDir: env.AGENT_ARTIFACTS_DIR,
+      });
+
+      await saveAgentResult(baseJobId, result);
       await updateJobStatus(baseJobId, "completed");
     }
 
