@@ -6,6 +6,7 @@ import type { NextFunction, Request, Response } from "express";
 import { requireAuth } from "./auth-middleware.js";
 import { getGoogleAuthCallback, getGoogleAuthStart, getMe, postDemoAuth } from "./auth.js";
 import { env } from "./env.js";
+import { getDiscoverJobsPlaceholder, getJobs, postManualJob } from "./jobs.js";
 import { getResumes, postPinResume, postResumeUpload, resumeUploadMiddleware } from "./resume-vault.js";
 
 const app = express();
@@ -27,6 +28,10 @@ app.get("/api/auth/me", requireAuth, getMe);
 app.get("/api/resumes", requireAuth, getResumes);
 app.post("/api/resumes/upload", requireAuth, resumeUploadMiddleware, postResumeUpload);
 app.post("/api/resumes/:resumeId/pin", requireAuth, postPinResume);
+
+app.get("/api/jobs", requireAuth, getJobs);
+app.post("/api/jobs/manual", requireAuth, postManualJob);
+app.get("/api/jobs/discover", requireAuth, getDiscoverJobsPlaceholder);
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(400).json({ message: error.message });

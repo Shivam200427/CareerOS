@@ -8,6 +8,8 @@ const apiEnvSchema = z.object({
   JWT_SECRET: z.string().min(16),
   FRONTEND_URL: z.url().default("http://localhost:5173"),
   REDIS_URL: z.url().default("redis://localhost:6379"),
+  JOB_QUEUE_NAME: z.string().default("job-apply-queue"),
+  JOB_DB_FILE: z.string().default("data/jobs/store.json"),
   RESUME_STORAGE_DIR: z.string().default("data/resumes/files"),
   RESUME_DB_FILE: z.string().default("data/resumes/store.json"),
 });

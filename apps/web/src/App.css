@@ -176,6 +176,68 @@ button:disabled {
   color: #46351f;
 }
 
+.url-input {
+  min-width: min(100%, 28rem);
+  border: 1px solid #cfb277;
+  border-radius: 999px;
+  padding: 0.62rem 0.9rem;
+  background: #fff9ee;
+  color: #3a2a12;
+}
+
+.job-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.job-item {
+  border: 1px solid rgba(188, 124, 43, 0.25);
+  border-radius: 12px;
+  padding: 0.85rem;
+  background: rgba(255, 252, 246, 0.88);
+}
+
+.badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.badge-queued {
+  background: #f7d58f;
+  color: #613500;
+}
+
+.badge-processing {
+  background: #cce7ff;
+  color: #0f4a78;
+}
+
+.badge-completed {
+  background: #cfeeda;
+  color: #154529;
+}
+
+.badge-failed {
+  background: #ffd8cf;
+  color: #7d2306;
+}
+
+.job-link {
+  display: inline-block;
+  margin-top: 0.4rem;
+  color: #0f4a78;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.job-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 900px) {
   .panel-grid {
     grid-template-columns: 1fr;

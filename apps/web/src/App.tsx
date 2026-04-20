@@ -28,6 +28,20 @@ type ResumeRecord = {
   };
 };
 
+type JobRecord = {
+  id: string;
+  url: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  title: string;
+  company: string;
+  summary: string;
+  parsedSkills: string[];
+  matchScore: number;
+  retries: number;
+  lastError?: string;
+  updatedAt: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 function App() {
@@ -37,6 +51,9 @@ function App() {
   const [error, setError] = useState<string>("");
   const [resumeBusy, setResumeBusy] = useState(false);
   const [resumes, setResumes] = useState<ResumeRecord[]>([]);
+  const [jobsBusy, setJobsBusy] = useState(false);
+  const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [manualJobUrl, setManualJobUrl] = useState("");
 
   const headers = useMemo(
     () => (auth ? { Authorization: `Bearer ${auth.token}` } : undefined),
@@ -169,14 +186,80 @@ function App() {
     }
   }
 
+  async function fetchJobs() {
+    if (!headers) {
+      setError("Sign in first to view job queue.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs`, { headers });
+      if (!response.ok) {
+        throw new Error("Unable to load jobs");
+      }
+
+      const data = (await response.json()) as { jobs: JobRecord[] };
+      setJobs(data.jobs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
+  async function submitManualJob() {
+    if (!headers) {
+      setError("Sign in first to submit job URLs.");
+      return;
+    }
+
+    if (!manualJobUrl.trim()) {
+      setError("Enter a valid job URL first.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/manual`, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ url: manualJobUrl.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to enqueue manual job URL");
+      }
+
+      const result = (await response.json()) as { queued?: boolean; message?: string };
+      setStatus(
+        result.queued
+          ? "Manual job added to queue"
+          : result.message ?? "Job already exists in queue/history",
+      );
+
+      setManualJobUrl("");
+      await fetchJobs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
-        <p className="tag">CareerOS / Milestone A</p>
+        <p className="tag">CareerOS / Milestone C</p>
         <h1>JobAgent control room</h1>
         <p className="subtitle">
-          Foundation is live: auth-ready API, queue worker skeleton, and frontend shell for the
-          autonomous application workflow.
+          Auth, Resume Vault, and manual URL queueing are live for the autonomous application
+          workflow.
         </p>
       </section>
 
@@ -199,8 +282,8 @@ function App() {
         <article className="panel">
           <h2>Current baseline</h2>
           <ul>
-            <li>Express API with auth and Resume Vault endpoints</li>
-            <li>BullMQ worker connected to Redis queue</li>
+            <li>Express API with auth, Resume Vault, and manual job intake</li>
+            <li>BullMQ worker consumes queue and updates job status</li>
             <li>Monorepo workspace for web, api, worker, and shared</li>
             <li>Environment schema validation and local persistence defaults</li>
           </ul>
@@ -256,6 +339,56 @@ function App() {
         </article>
 
         <article className="panel panel-wide">
+          <h2>Manual Job Intake</h2>
+          <p>
+            Submit a job link to parse title, summary, and skills; each job is scored against your
+            pinned resume and queued for processing.
+          </p>
+          <div className="actions">
+            <input
+              className="url-input"
+              type="url"
+              placeholder="https://company.com/careers/software-engineer"
+              value={manualJobUrl}
+              onChange={(event) => setManualJobUrl(event.target.value)}
+              disabled={!auth || jobsBusy}
+            />
+            <button onClick={submitManualJob} disabled={!auth || jobsBusy || !manualJobUrl.trim()}>
+              {jobsBusy ? "Submitting..." : "Add Manual URL"}
+            </button>
+            <button onClick={fetchJobs} className="secondary" disabled={!auth || jobsBusy}>
+              Refresh Queue
+            </button>
+          </div>
+          <div className="job-list">
+            {jobs.length === 0 ? (
+              <p>No queued jobs yet.</p>
+            ) : (
+              jobs.map((job) => (
+                <article className="job-item" key={job.id}>
+                  <div className="resume-row">
+                    <strong>{job.title}</strong>
+                    <span className={`badge badge-${job.status}`}>{job.status}</span>
+                  </div>
+                  <p>
+                    {job.company} - Match score: {job.matchScore}
+                  </p>
+                  <p className="summary">{job.summary || "No summary available."}</p>
+                  <p>Skills: {job.parsedSkills.length > 0 ? job.parsedSkills.join(", ") : "n/a"}</p>
+                  <p>
+                    Updated: {new Date(job.updatedAt).toLocaleString()} | Retries: {job.retries}
+                  </p>
+                  {job.lastError ? <p className="error">Last error: {job.lastError}</p> : null}
+                  <a href={job.url} target="_blank" rel="noreferrer" className="job-link">
+                    Open listing
+                  </a>
+                </article>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel panel-wide">
           <h2>Next build targets</h2>
           <div className="columns">
             <div>
@@ -264,7 +397,7 @@ function App() {
             </div>
             <div>
               <h3>Milestone C</h3>
-              <p>Manual job URL queue, JD parser, and scoring entry point.</p>
+              <p>Completed: manual URL queue, JD parsing, status tracking, match scoring.</p>
             </div>
             <div>
               <h3>Milestone D</h3>
