@@ -8,6 +8,8 @@ const apiEnvSchema = z.object({
   JWT_SECRET: z.string().min(16),
   FRONTEND_URL: z.url().default("http://localhost:5173"),
   REDIS_URL: z.url().default("redis://localhost:6379"),
+  RESUME_STORAGE_DIR: z.string().default("data/resumes/files"),
+  RESUME_DB_FILE: z.string().default("data/resumes/store.json"),
 });
 
 const parsed = apiEnvSchema.safeParse(process.env);

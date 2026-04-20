@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import "./App.css";
 
 type User = {
@@ -12,6 +12,22 @@ type AuthPayload = {
   user: User;
 };
 
+type ResumeRecord = {
+  id: string;
+  version: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  isPinned: boolean;
+  uploadedAt: string;
+  parsedData: {
+    summary: string;
+    skills: string[];
+    keywords: string[];
+    experienceYears: number | null;
+  };
+};
+
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 function App() {
@@ -19,6 +35,8 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("Not connected");
   const [error, setError] = useState<string>("");
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumes, setResumes] = useState<ResumeRecord[]>([]);
 
   const headers = useMemo(
     () => (auth ? { Authorization: `Bearer ${auth.token}` } : undefined),
@@ -64,6 +82,93 @@ function App() {
     }
   }
 
+  async function fetchResumes() {
+    if (!headers) {
+      setError("Sign in first to view resumes.");
+      return;
+    }
+
+    setResumeBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/resumes`, { headers });
+      if (!response.ok) {
+        throw new Error("Unable to load resume versions");
+      }
+
+      const data = (await response.json()) as { resumes: ResumeRecord[] };
+      setResumes(data.resumes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setResumeBusy(false);
+    }
+  }
+
+  async function uploadResume(event: ChangeEvent<HTMLInputElement>) {
+    if (!headers) {
+      setError("Sign in first to upload resumes.");
+      return;
+    }
+
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("resume", file);
+
+    setResumeBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/resumes/upload`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Resume upload failed");
+      }
+
+      setStatus(`Uploaded ${file.name} successfully`);
+      await fetchResumes();
+      event.target.value = "";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setResumeBusy(false);
+    }
+  }
+
+  async function pinResume(resumeId: string) {
+    if (!headers) {
+      setError("Sign in first to pin resumes.");
+      return;
+    }
+
+    setResumeBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/resumes/${resumeId}/pin`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to pin selected resume");
+      }
+
+      await fetchResumes();
+      setStatus("Pinned resume version updated");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setResumeBusy(false);
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
@@ -94,11 +199,60 @@ function App() {
         <article className="panel">
           <h2>Current baseline</h2>
           <ul>
-            <li>Express API with auth endpoints and health checks</li>
+            <li>Express API with auth and Resume Vault endpoints</li>
             <li>BullMQ worker connected to Redis queue</li>
             <li>Monorepo workspace for web, api, worker, and shared</li>
-            <li>Environment schema validation and secure defaults</li>
+            <li>Environment schema validation and local persistence defaults</li>
           </ul>
+        </article>
+
+        <article className="panel panel-wide">
+          <h2>Resume Vault</h2>
+          <p>Upload a PDF/DOCX/TXT resume, track versions, and pin your active application resume.</p>
+          <div className="actions">
+            <label className="file-input">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={uploadResume}
+                disabled={!auth || resumeBusy}
+              />
+              Upload Resume
+            </label>
+            <button onClick={fetchResumes} disabled={!auth || resumeBusy} className="secondary">
+              {resumeBusy ? "Loading..." : "Refresh Versions"}
+            </button>
+          </div>
+          <div className="resume-list">
+            {resumes.length === 0 ? (
+              <p>No resumes uploaded yet.</p>
+            ) : (
+              resumes.map((resume) => (
+                <article key={resume.id} className="resume-item">
+                  <div className="resume-row">
+                    <div>
+                      <strong>v{resume.version}</strong> - {resume.fileName}
+                    </div>
+                    <button
+                      className="secondary"
+                      disabled={resumeBusy || resume.isPinned}
+                      onClick={() => pinResume(resume.id)}
+                    >
+                      {resume.isPinned ? "Pinned" : "Pin version"}
+                    </button>
+                  </div>
+                  <p>
+                    {new Date(resume.uploadedAt).toLocaleString()} - {(resume.sizeBytes / 1024).toFixed(1)}
+                    KB
+                  </p>
+                  <p className="summary">{resume.parsedData.summary || "No text extracted yet."}</p>
+                  <p>
+                    Skills: {resume.parsedData.skills.length > 0 ? resume.parsedData.skills.join(", ") : "n/a"}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
         </article>
 
         <article className="panel panel-wide">
@@ -106,7 +260,7 @@ function App() {
           <div className="columns">
             <div>
               <h3>Milestone B</h3>
-              <p>Resume Vault with upload, parsing pipeline, and version history.</p>
+              <p>Completed: upload, parsing pipeline, pinning, and version history.</p>
             </div>
             <div>
               <h3>Milestone C</h3>

@@ -83,6 +83,19 @@ li + li {
   flex-wrap: wrap;
 }
 
+.file-input {
+  border-radius: 999px;
+  padding: 0.62rem 1rem;
+  font-weight: 600;
+  background: #1e5631;
+  color: #fffcf4;
+  cursor: pointer;
+}
+
+.file-input input {
+  display: none;
+}
+
 button {
   appearance: none;
   border: 1px solid transparent;
@@ -135,6 +148,32 @@ button:disabled {
   border-radius: 14px;
   padding: 0.85rem;
   background: rgba(255, 251, 244, 0.8);
+}
+
+.resume-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.resume-item {
+  border: 1px solid rgba(188, 124, 43, 0.25);
+  border-radius: 12px;
+  padding: 0.85rem;
+  background: rgba(255, 252, 246, 0.88);
+}
+
+.resume-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.summary {
+  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
+  color: #46351f;
 }
 
 @media (max-width: 900px) {

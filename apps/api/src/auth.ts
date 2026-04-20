@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import { env } from "./env.js";
+import type { AuthenticatedRequest } from "./auth-middleware.js";
 
 const demoUser = {
   id: "demo-user-1",
@@ -37,19 +38,8 @@ export function postDemoAuth(req: Request, res: Response) {
   });
 }
 
-export function getMe(req: Request, res: Response) {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    res.status(401).json({ message: "Missing bearer token" });
-    return;
-  }
-
-  const token = auth.slice(7);
-
-  try {
-    const payload = jwt.verify(token, env.JWT_SECRET);
-    res.json({ payload });
-  } catch {
-    res.status(401).json({ message: "Invalid token" });
-  }
+export function getMe(req: AuthenticatedRequest, res: Response) {
+  res.json({
+    user: req.user,
+  });
 }
