@@ -77,6 +77,7 @@ npm run dev
 ## API endpoints in Milestone D
 
 - `POST /api/jobs/:jobId/approve` (auth required)
+- `POST /api/jobs/:jobId/execute` (auth required)
 - `POST /api/jobs/:jobId/skip` (auth required)
 
 Resume upload supports `.pdf`, `.doc`, `.docx`, and `.txt` files up to 5 MB.
@@ -90,6 +91,7 @@ When a job is approved, the worker runs a submit-stage agent:
 
 Current submit behavior is intentionally safe:
 
+- Approval and execution are two separate actions
 - The agent discovers and fills common text/select fields
 - Final submit click is still blocked in this phase
 - Execution steps are persisted and shown in the dashboard for auditability

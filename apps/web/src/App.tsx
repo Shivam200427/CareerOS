@@ -332,6 +332,33 @@ function App() {
     }
   }
 
+  async function executeJob(jobId: string) {
+    if (!headers) {
+      setError("Sign in first to execute approved jobs.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/${jobId}/execute`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to start submit stage");
+      }
+
+      setStatus("Submit stage started for approved job");
+      await fetchJobs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
@@ -474,6 +501,13 @@ function App() {
                       </button>
                       <button className="secondary" disabled={jobsBusy} onClick={() => skipJob(job.id)}>
                         Skip
+                      </button>
+                    </div>
+                  ) : null}
+                  {job.status === "approved" ? (
+                    <div className="actions">
+                      <button disabled={jobsBusy} onClick={() => executeJob(job.id)}>
+                        Execute Submit Stage
                       </button>
                     </div>
                   ) : null}

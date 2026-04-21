@@ -10,6 +10,7 @@ import {
   getDiscoverJobsPlaceholder,
   getJobs,
   postApproveJob,
+  postExecuteJob,
   postManualJob,
   postSkipJob,
 } from "./jobs.js";
@@ -38,6 +39,7 @@ app.post("/api/resumes/:resumeId/pin", requireAuth, postPinResume);
 app.get("/api/jobs", requireAuth, getJobs);
 app.post("/api/jobs/manual", requireAuth, postManualJob);
 app.post("/api/jobs/:jobId/approve", requireAuth, postApproveJob);
+app.post("/api/jobs/:jobId/execute", requireAuth, postExecuteJob);
 app.post("/api/jobs/:jobId/skip", requireAuth, postSkipJob);
 app.get("/api/jobs/discover", requireAuth, getDiscoverJobsPlaceholder);
 

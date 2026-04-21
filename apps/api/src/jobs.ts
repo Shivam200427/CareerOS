@@ -363,9 +363,7 @@ export async function postApproveJob(req: AuthenticatedRequest, res: Response) {
     return;
   }
 
-  await enqueueJob("manual-job-submit", updated.id, updated.userId, updated.url);
-
-  res.json({ job: updated, queued: true });
+  res.json({ job: updated, queued: false, message: "Approved. Use execute action to run submit stage." });
 }
 
 export async function postSkipJob(req: AuthenticatedRequest, res: Response) {
@@ -406,4 +404,45 @@ export async function postSkipJob(req: AuthenticatedRequest, res: Response) {
   }
 
   res.json({ job: updated });
+}
+
+export async function postExecuteJob(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const user = req.user;
+  const jobId = String(req.params.jobId ?? "");
+  if (!jobId) {
+    res.status(400).json({ message: "Missing job id" });
+    return;
+  }
+
+  const store = await readJobStore();
+  const current = store.jobs.find((job) => job.id === jobId && job.userId === user.id);
+  if (!current) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  if (current.status !== "approved") {
+    res.status(400).json({ message: "Only approved jobs can be executed" });
+    return;
+  }
+
+  const updated = await updateJobRecord(jobId, user.id, (job) => ({
+    ...job,
+    status: "queued",
+    lastError: undefined,
+  }));
+
+  if (!updated) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  await enqueueJob("manual-job-submit", updated.id, updated.userId, updated.url);
+
+  res.json({ job: updated, queued: true, message: "Submit stage started" });
 }
