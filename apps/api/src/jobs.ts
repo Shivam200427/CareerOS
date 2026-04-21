@@ -50,6 +50,8 @@ export type JobRecord = {
     artifactPath?: string;
     finalSubmitAttempted?: boolean;
     finalSubmitExecuted?: boolean;
+    averageConfidence?: number;
+    lowConfidenceFieldCount?: number;
     discoveredFields?: Array<{
       selector: string;
       label: string;
@@ -63,6 +65,10 @@ export type JobRecord = {
       value?: string;
       outcome: "ok" | "skipped" | "failed";
       note?: string;
+      confidence?: number;
+      strategy?: string;
+      startedAt?: string;
+      durationMs?: number;
     }>;
   };
   agentRun?: {

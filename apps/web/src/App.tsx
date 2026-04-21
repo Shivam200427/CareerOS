@@ -59,6 +59,8 @@ type JobRecord = {
     artifactPath?: string;
     finalSubmitAttempted?: boolean;
     finalSubmitExecuted?: boolean;
+    averageConfidence?: number;
+    lowConfidenceFieldCount?: number;
     discoveredFields?: Array<{
       selector: string;
       label: string;
@@ -72,6 +74,8 @@ type JobRecord = {
       value?: string;
       outcome: "ok" | "skipped" | "failed";
       note?: string;
+      confidence?: number;
+      strategy?: string;
       startedAt?: string;
       durationMs?: number;
     }>;
@@ -568,6 +572,14 @@ function App() {
                         : " | Submit: skipped"}
                     </p>
                   ) : null}
+                  {typeof job.agentResult?.averageConfidence === "number" ? (
+                    <p>
+                      Avg confidence: {(job.agentResult.averageConfidence * 100).toFixed(0)}%
+                      {typeof job.agentResult.lowConfidenceFieldCount === "number"
+                        ? ` | Low-confidence fields: ${job.agentResult.lowConfidenceFieldCount}`
+                        : ""}
+                    </p>
+                  ) : null}
                   {job.agentRun?.durationMs ? (
                     <p>
                       Run duration: {(job.agentRun.durationMs / 1000).toFixed(2)}s
@@ -616,6 +628,8 @@ function App() {
                         <li key={`${job.id}-step-${index}`}>
                           <strong>{step.action}</strong> [{step.outcome}]
                           {typeof step.durationMs === "number" ? ` (${step.durationMs}ms)` : ""}
+                          {typeof step.confidence === "number" ? ` | confidence ${(step.confidence * 100).toFixed(0)}%` : ""}
+                          {step.strategy ? ` | strategy ${step.strategy}` : ""}
                           {step.note ? ` - ${step.note}` : ""}
                         </li>
                       ))}

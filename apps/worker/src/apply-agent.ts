@@ -9,6 +9,8 @@ type ApplyStep = {
   note?: string;
   startedAt: string;
   durationMs: number;
+  confidence?: number;
+  strategy?: string;
 };
 
 type DiscoveredField = {
@@ -28,6 +30,8 @@ export type ApplyResult = {
   steps: ApplyStep[];
   finalSubmitAttempted: boolean;
   finalSubmitExecuted: boolean;
+  averageConfidence: number;
+  lowConfidenceFieldCount: number;
 };
 
 type ApplyOptions = {
@@ -50,37 +54,73 @@ type ArtifactPayload = {
   steps: ApplyStep[];
   finalSubmitAttempted: boolean;
   finalSubmitExecuted: boolean;
+  averageConfidence: number;
+  lowConfidenceFieldCount: number;
   note?: string;
+};
+
+type AnswerCandidate = {
+  value: string;
+  confidence: number;
+  strategy: string;
 };
 
 function inferAnswer(field: DiscoveredField) {
   const key = `${field.label} ${field.placeholder ?? ""}`.toLowerCase();
 
   if (key.includes("email")) {
-    return "applicant@example.com";
+    return {
+      value: "applicant@example.com",
+      confidence: 0.98,
+      strategy: "email-pattern",
+    } satisfies AnswerCandidate;
   }
 
   if (key.includes("phone") || key.includes("mobile") || field.type === "tel") {
-    return "+1 555 012 3456";
+    return {
+      value: "+1 555 012 3456",
+      confidence: 0.96,
+      strategy: "phone-pattern",
+    } satisfies AnswerCandidate;
   }
 
   if (key.includes("linkedin")) {
-    return "https://www.linkedin.com/in/carreros-agent";
+    return {
+      value: "https://www.linkedin.com/in/carreros-agent",
+      confidence: 0.95,
+      strategy: "linkedin-url",
+    } satisfies AnswerCandidate;
   }
 
   if (key.includes("portfolio") || key.includes("website") || field.type === "url") {
-    return "https://github.com/Shivam200427/CareerOS";
+    return {
+      value: "https://github.com/Shivam200427/CareerOS",
+      confidence: 0.93,
+      strategy: "portfolio-url",
+    } satisfies AnswerCandidate;
   }
 
   if (key.includes("name")) {
-    return "CareerOS Candidate";
+    return {
+      value: "CareerOS Candidate",
+      confidence: 0.9,
+      strategy: "name-generic",
+    } satisfies AnswerCandidate;
   }
 
   if (key.includes("cover") || key.includes("why") || key.includes("summary")) {
-    return "I am excited to contribute with strong software engineering fundamentals and ownership mindset.";
+    return {
+      value: "I am excited to contribute with strong software engineering fundamentals and ownership mindset.",
+      confidence: 0.72,
+      strategy: "longform-generic",
+    } satisfies AnswerCandidate;
   }
 
-  return "Autofilled by CareerOS agent review flow.";
+  return {
+    value: "Autofilled by CareerOS agent review flow.",
+    confidence: 0.5,
+    strategy: "fallback-generic",
+  } satisfies AnswerCandidate;
 }
 
 export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult> {
@@ -95,7 +135,14 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
   async function recordStep(
     steps: ApplyStep[],
     action: string,
-    runner: () => Promise<{ target?: string; value?: string; note?: string; outcome?: "ok" | "skipped" }>,
+    runner: () => Promise<{
+      target?: string;
+      value?: string;
+      note?: string;
+      outcome?: "ok" | "skipped";
+      confidence?: number;
+      strategy?: string;
+    }>,
   ) {
     const startedAtDate = new Date();
     const startedAt = startedAtDate.toISOString();
@@ -111,6 +158,8 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
         target: result.target,
         value: result.value,
         note: result.note,
+        confidence: result.confidence,
+        strategy: result.strategy,
       };
       steps.push(step);
       return { ok: true as const, step };
@@ -155,6 +204,8 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       steps,
       finalSubmitAttempted: false,
       finalSubmitExecuted: false,
+      averageConfidence: 0,
+      lowConfidenceFieldCount: 0,
     });
 
     return {
@@ -163,6 +214,8 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       steps,
       finalSubmitAttempted: false,
       finalSubmitExecuted: false,
+      averageConfidence: 0,
+      lowConfidenceFieldCount: 0,
     };
   }
 
@@ -243,6 +296,9 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
     }));
 
     let filledCount = 0;
+    let confidenceTotal = 0;
+    let confidenceCount = 0;
+    let lowConfidenceFieldCount = 0;
     for (const field of discoveredFields) {
       const answer = inferAnswer(field);
       const result = await recordStep(steps, "fill", async () => {
@@ -256,27 +312,42 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
             return {
               target: field.selector,
               note: `${field.label} (selected option index 1)`,
+              confidence: 0.88,
+              strategy: "select-first-option",
             };
           }
           return {
             target: field.selector,
             note: "No options to select",
             outcome: "skipped",
+            confidence: 0,
+            strategy: "select-no-options",
           };
         }
 
-        await locator.fill(answer);
+        await locator.fill(answer.value);
         return {
           target: field.selector,
-          value: answer.slice(0, 64),
+          value: answer.value.slice(0, 64),
           note: field.label,
+          confidence: answer.confidence,
+          strategy: answer.strategy,
         };
       });
 
       if (result.ok && result.step.outcome === "ok") {
         filledCount += 1;
+        if (typeof result.step.confidence === "number") {
+          confidenceTotal += result.step.confidence;
+          confidenceCount += 1;
+          if (result.step.confidence < 0.65) {
+            lowConfidenceFieldCount += 1;
+          }
+        }
       }
     }
+
+    const averageConfidence = confidenceCount > 0 ? Number((confidenceTotal / confidenceCount).toFixed(3)) : 0;
 
     let finalSubmitExecuted = false;
     let finalSubmitAttempted = false;
@@ -318,6 +389,8 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       steps,
       finalSubmitAttempted,
       finalSubmitExecuted,
+      averageConfidence,
+      lowConfidenceFieldCount,
     });
 
     await context.close();
@@ -332,6 +405,8 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       steps,
       finalSubmitAttempted,
       finalSubmitExecuted,
+      averageConfidence,
+      lowConfidenceFieldCount,
     };
   } finally {
     await browser.close();

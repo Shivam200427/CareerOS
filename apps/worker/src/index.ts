@@ -34,6 +34,8 @@ type JobStore = {
       artifactPath?: string;
       finalSubmitAttempted?: boolean;
       finalSubmitExecuted?: boolean;
+      averageConfidence?: number;
+      lowConfidenceFieldCount?: number;
       discoveredFields?: Array<{
         selector: string;
         label: string;
@@ -47,6 +49,10 @@ type JobStore = {
         value?: string;
         outcome: "ok" | "skipped" | "failed";
         note?: string;
+        confidence?: number;
+        strategy?: string;
+        startedAt?: string;
+        durationMs?: number;
       }>;
     };
     updatedAt: string;
@@ -122,6 +128,8 @@ async function saveAgentResult(
     artifactPath: string;
     finalSubmitAttempted: boolean;
     finalSubmitExecuted: boolean;
+    averageConfidence: number;
+    lowConfidenceFieldCount: number;
     discoveredFields?: Array<{
       selector: string;
       label: string;
@@ -135,6 +143,8 @@ async function saveAgentResult(
       value?: string;
       outcome: "ok" | "skipped" | "failed";
       note?: string;
+      confidence?: number;
+      strategy?: string;
       startedAt?: string;
       durationMs?: number;
     }>;

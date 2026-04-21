@@ -98,6 +98,13 @@ Current submit behavior is intentionally safe:
 - Final submit click is blocked by default and must be enabled per-job
 - Execution steps are persisted and shown in the dashboard for auditability
 - Each run stores a timeline with per-step durations and downloadable artifact logs
+- Each fill step includes strategy and confidence scoring for review quality
+
+Confidence model in this phase:
+
+- Deterministic field strategy selection (email, phone, URL, longform, fallback)
+- Per-step confidence values in range 0 to 1
+- Run-level summary: average confidence and low-confidence field count
 
 ## Scripts
 
