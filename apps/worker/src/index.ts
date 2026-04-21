@@ -20,11 +20,20 @@ type JobStore = {
     id: string;
     status: JobStatus;
     retries: number;
+    allowFinalSubmit?: boolean;
     lastError?: string;
+    agentRun?: {
+      startedAt?: string;
+      finishedAt?: string;
+      durationMs?: number;
+    };
     agentResult?: {
       mode: "playwright" | "simulated";
       title?: string;
       screenshotPath?: string;
+      artifactPath?: string;
+      finalSubmitAttempted?: boolean;
+      finalSubmitExecuted?: boolean;
       discoveredFields?: Array<{
         selector: string;
         label: string;
@@ -84,12 +93,51 @@ async function updateJobStatus(jobId: string, status: JobStatus, lastError?: str
   await fs.writeFile(jobsDbPath, JSON.stringify(store, null, 2), "utf-8");
 }
 
+async function saveRunTimeline(jobId: string, startedAt: string, finishedAt: string) {
+  if (!jobId) {
+    return;
+  }
+
+  await ensureStoreReady();
+  const raw = await fs.readFile(jobsDbPath, "utf-8");
+  const store = JSON.parse(raw) as JobStore;
+  const job = store.jobs.find((item) => item.id === jobId);
+  if (!job) {
+    return;
+  }
+
+  const durationMs = Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime());
+  job.agentRun = { startedAt, finishedAt, durationMs };
+  job.updatedAt = new Date().toISOString();
+
+  await fs.writeFile(jobsDbPath, JSON.stringify(store, null, 2), "utf-8");
+}
+
 async function saveAgentResult(
   jobId: string,
   result: {
     mode: "playwright" | "simulated";
     title?: string;
     screenshotPath?: string;
+    artifactPath: string;
+    finalSubmitAttempted: boolean;
+    finalSubmitExecuted: boolean;
+    discoveredFields?: Array<{
+      selector: string;
+      label: string;
+      type: string;
+      placeholder?: string;
+    }>;
+    filledCount?: number;
+    steps?: Array<{
+      action: string;
+      target?: string;
+      value?: string;
+      outcome: "ok" | "skipped" | "failed";
+      note?: string;
+      startedAt?: string;
+      durationMs?: number;
+    }>;
   },
 ) {
   if (!jobId) {
@@ -113,6 +161,7 @@ const worker = new Worker(
   env.JOB_QUEUE_NAME,
   async (job) => {
     const baseJobId = String(job.data?.jobId ?? "");
+    const runStart = new Date().toISOString();
     console.log(`Processing job ${job.id}`, job.name, job.data);
 
     await updateJobStatus(baseJobId, "processing");
@@ -129,11 +178,14 @@ const worker = new Worker(
         url: String(job.data?.url ?? ""),
         enabled: env.PLAYWRIGHT_ENABLED,
         artifactsDir: env.AGENT_ARTIFACTS_DIR,
+        allowFinalSubmit: Boolean(job.data?.allowFinalSubmit),
       });
 
       await saveAgentResult(baseJobId, result);
       await updateJobStatus(baseJobId, "completed");
     }
+
+    await saveRunTimeline(baseJobId, runStart, new Date().toISOString());
 
     return {
       processedAt: new Date().toISOString(),

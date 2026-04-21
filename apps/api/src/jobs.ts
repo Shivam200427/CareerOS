@@ -40,12 +40,16 @@ export type JobRecord = {
   summary: string;
   parsedSkills: string[];
   matchScore: number;
+  allowFinalSubmit: boolean;
   retries: number;
   lastError?: string;
   agentResult?: {
     mode: "playwright" | "simulated";
     title?: string;
     screenshotPath?: string;
+    artifactPath?: string;
+    finalSubmitAttempted?: boolean;
+    finalSubmitExecuted?: boolean;
     discoveredFields?: Array<{
       selector: string;
       label: string;
@@ -61,6 +65,11 @@ export type JobRecord = {
       note?: string;
     }>;
   };
+  agentRun?: {
+    startedAt?: string;
+    finishedAt?: string;
+    durationMs?: number;
+  };
   createdAt: string;
   updatedAt: string;
 };
@@ -73,6 +82,10 @@ type QueueJobName = "manual-job-intake" | "manual-job-submit";
 
 const manualJobSchema = z.object({
   url: z.url(),
+});
+
+const setSubmitModeSchema = z.object({
+  allowFinalSubmit: z.boolean(),
 });
 
 const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -271,6 +284,7 @@ export async function postManualJob(req: AuthenticatedRequest, res: Response) {
     summary: parsed.summary,
     parsedSkills: parsed.parsedSkills,
     matchScore,
+    allowFinalSubmit: false,
     retries: 0,
     createdAt: now,
     updatedAt: now,
@@ -285,12 +299,17 @@ export async function postManualJob(req: AuthenticatedRequest, res: Response) {
 }
 
 async function enqueueJob(name: QueueJobName, jobId: string, userId: string, url: string) {
+  const store = await readJobStore();
+  const current = store.jobs.find((job) => job.id === jobId && job.userId === userId);
+  const allowFinalSubmit = current?.allowFinalSubmit ?? false;
+
   await queue.add(
     name,
     {
       jobId,
       userId,
       url,
+      allowFinalSubmit,
     },
     {
       jobId: `${jobId}:${name}`,
@@ -445,4 +464,72 @@ export async function postExecuteJob(req: AuthenticatedRequest, res: Response) {
   await enqueueJob("manual-job-submit", updated.id, updated.userId, updated.url);
 
   res.json({ job: updated, queued: true, message: "Submit stage started" });
+}
+
+export async function postSetSubmitMode(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const user = req.user;
+  const jobId = String(req.params.jobId ?? "");
+  if (!jobId) {
+    res.status(400).json({ message: "Missing job id" });
+    return;
+  }
+
+  const parsedBody = setSubmitModeSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    res.status(400).json({ message: "Invalid payload. Expected allowFinalSubmit boolean." });
+    return;
+  }
+
+  const updated = await updateJobRecord(jobId, user.id, (job) => ({
+    ...job,
+    allowFinalSubmit: parsedBody.data.allowFinalSubmit,
+  }));
+
+  if (!updated) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  res.json({ job: updated });
+}
+
+export async function getJobArtifact(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const user = req.user;
+  const jobId = String(req.params.jobId ?? "");
+  if (!jobId) {
+    res.status(400).json({ message: "Missing job id" });
+    return;
+  }
+
+  const store = await readJobStore();
+  const target = store.jobs.find((job) => job.id === jobId && job.userId === user.id);
+  if (!target) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+
+  const artifactPath = target.agentResult?.artifactPath;
+  if (!artifactPath) {
+    res.status(404).json({ message: "No artifact available for this job yet" });
+    return;
+  }
+
+  try {
+    await fs.access(artifactPath);
+  } catch {
+    res.status(404).json({ message: "Artifact file not found on disk" });
+    return;
+  }
+
+  res.download(artifactPath, `${jobId}-run.json`);
 }

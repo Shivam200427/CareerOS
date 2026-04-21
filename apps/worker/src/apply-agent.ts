@@ -7,6 +7,8 @@ type ApplyStep = {
   value?: string;
   outcome: "ok" | "skipped" | "failed";
   note?: string;
+  startedAt: string;
+  durationMs: number;
 };
 
 type DiscoveredField = {
@@ -20,9 +22,12 @@ export type ApplyResult = {
   mode: "playwright" | "simulated";
   title?: string;
   screenshotPath?: string;
+  artifactPath: string;
   discoveredFields?: DiscoveredField[];
   filledCount?: number;
   steps: ApplyStep[];
+  finalSubmitAttempted: boolean;
+  finalSubmitExecuted: boolean;
 };
 
 type ApplyOptions = {
@@ -30,6 +35,22 @@ type ApplyOptions = {
   url: string;
   enabled: boolean;
   artifactsDir: string;
+  allowFinalSubmit: boolean;
+};
+
+type ArtifactPayload = {
+  jobId: string;
+  url: string;
+  mode: "playwright" | "simulated";
+  createdAt: string;
+  title?: string;
+  screenshotPath?: string;
+  discoveredFields?: DiscoveredField[];
+  filledCount?: number;
+  steps: ApplyStep[];
+  finalSubmitAttempted: boolean;
+  finalSubmitExecuted: boolean;
+  note?: string;
 };
 
 function inferAnswer(field: DiscoveredField) {
@@ -65,43 +86,83 @@ function inferAnswer(field: DiscoveredField) {
 export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult> {
   const artifactsRoot = path.resolve(process.cwd(), options.artifactsDir);
   await fs.mkdir(artifactsRoot, { recursive: true });
+  const artifactPath = path.join(artifactsRoot, `${options.jobId}-run.json`);
+
+  async function writeArtifact(payload: ArtifactPayload) {
+    await fs.writeFile(artifactPath, JSON.stringify(payload, null, 2), "utf-8");
+  }
+
+  async function recordStep(
+    steps: ApplyStep[],
+    action: string,
+    runner: () => Promise<{ target?: string; value?: string; note?: string; outcome?: "ok" | "skipped" }>,
+  ) {
+    const startedAtDate = new Date();
+    const startedAt = startedAtDate.toISOString();
+    const startMs = Date.now();
+    try {
+      const result = await runner();
+      const durationMs = Date.now() - startMs;
+      const step: ApplyStep = {
+        action,
+        startedAt,
+        durationMs,
+        outcome: result.outcome ?? "ok",
+        target: result.target,
+        value: result.value,
+        note: result.note,
+      };
+      steps.push(step);
+      return { ok: true as const, step };
+    } catch (error) {
+      const durationMs = Date.now() - startMs;
+      const step: ApplyStep = {
+        action,
+        startedAt,
+        durationMs,
+        outcome: "failed",
+        note: error instanceof Error ? error.message : "Step failed",
+      };
+      steps.push(step);
+      return { ok: false as const, step };
+    }
+  }
 
   if (!options.enabled) {
-    const fallbackPath = path.join(artifactsRoot, `${options.jobId}-simulated.json`);
     const steps: ApplyStep[] = [
       {
         action: "prepare-run",
+        startedAt: new Date().toISOString(),
+        durationMs: 1,
         outcome: "ok",
         note: "Created simulated artifact because Playwright is disabled.",
       },
       {
         action: "submit",
+        startedAt: new Date().toISOString(),
+        durationMs: 1,
         outcome: "skipped",
         note: "No browser execution in simulated mode.",
       },
     ];
 
-    await fs.writeFile(
-      fallbackPath,
-      JSON.stringify(
-        {
-          jobId: options.jobId,
-          url: options.url,
-          mode: "simulated",
-          createdAt: new Date().toISOString(),
-          note: "Playwright disabled. Enable PLAYWRIGHT_ENABLED=true for browser execution.",
-          steps,
-        },
-        null,
-        2,
-      ),
-      "utf-8",
-    );
+    await writeArtifact({
+      jobId: options.jobId,
+      url: options.url,
+      mode: "simulated",
+      createdAt: new Date().toISOString(),
+      note: "Playwright disabled. Enable PLAYWRIGHT_ENABLED=true for browser execution.",
+      steps,
+      finalSubmitAttempted: false,
+      finalSubmitExecuted: false,
+    });
 
     return {
       mode: "simulated",
-      screenshotPath: fallbackPath,
+      artifactPath,
       steps,
+      finalSubmitAttempted: false,
+      finalSubmitExecuted: false,
     };
   }
 
@@ -117,8 +178,10 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
     const steps: ApplyStep[] = [];
     const page = await context.newPage();
 
-    steps.push({ action: "goto", target: options.url, outcome: "ok" });
-    await page.goto(options.url, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await recordStep(steps, "goto", async () => {
+      await page.goto(options.url, { waitUntil: "domcontentloaded", timeout: 25000 });
+      return { target: options.url };
+    });
 
     const title = await page.title();
 
@@ -175,53 +238,87 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       return output;
     });
 
-    steps.push({
-      action: "discover-fields",
-      outcome: "ok",
+    await recordStep(steps, "discover-fields", async () => ({
       note: `Discovered ${discoveredFields.length} candidate form fields`,
-    });
+    }));
 
     let filledCount = 0;
     for (const field of discoveredFields) {
       const answer = inferAnswer(field);
-      try {
+      const result = await recordStep(steps, "fill", async () => {
         const locator = page.locator(field.selector).first();
         await locator.waitFor({ timeout: 2000 });
 
         if (field.type === "select") {
-          const options = await locator.locator("option").allTextContents();
-          if (options.length > 1) {
+          const optionsText = await locator.locator("option").allTextContents();
+          if (optionsText.length > 1) {
             await locator.selectOption({ index: 1 });
-            steps.push({ action: "select", target: field.selector, outcome: "ok", note: field.label });
-            filledCount += 1;
-          } else {
-            steps.push({ action: "select", target: field.selector, outcome: "skipped", note: "No options" });
+            return {
+              target: field.selector,
+              note: `${field.label} (selected option index 1)`,
+            };
           }
-          continue;
+          return {
+            target: field.selector,
+            note: "No options to select",
+            outcome: "skipped",
+          };
         }
 
         await locator.fill(answer);
-        steps.push({ action: "fill", target: field.selector, value: answer.slice(0, 64), outcome: "ok", note: field.label });
-        filledCount += 1;
-      } catch (error) {
-        steps.push({
-          action: "fill",
+        return {
           target: field.selector,
-          outcome: "failed",
-          note: error instanceof Error ? error.message : "Fill failed",
-        });
+          value: answer.slice(0, 64),
+          note: field.label,
+        };
+      });
+
+      if (result.ok && result.step.outcome === "ok") {
+        filledCount += 1;
       }
     }
 
-    steps.push({
-      action: "submit",
-      outcome: "skipped",
-      note: "Final submit click intentionally disabled in this phase.",
-    });
+    let finalSubmitExecuted = false;
+    let finalSubmitAttempted = false;
+    if (options.allowFinalSubmit) {
+      finalSubmitAttempted = true;
+      const submitResult = await recordStep(steps, "final-submit", async () => {
+        const button = page
+          .locator('button[type="submit"], input[type="submit"], button:has-text("Apply"), button:has-text("Submit")')
+          .first();
+        await button.waitFor({ timeout: 2500 });
+        await button.click();
+        return {
+          note: "Submit action triggered by explicit execute permission.",
+        };
+      });
+      finalSubmitExecuted = submitResult.ok;
+    } else {
+      await recordStep(steps, "final-submit", async () => ({
+        outcome: "skipped",
+        note: "Final submit blocked. Enable allowFinalSubmit for this job before execution.",
+      }));
+    }
 
     const screenshotPath = path.join(artifactsRoot, `${options.jobId}.png`);
-    await page.screenshot({ path: screenshotPath, fullPage: true });
-    steps.push({ action: "screenshot", target: screenshotPath, outcome: "ok" });
+    await recordStep(steps, "screenshot", async () => {
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      return { target: screenshotPath };
+    });
+
+    await writeArtifact({
+      jobId: options.jobId,
+      url: options.url,
+      mode: "playwright",
+      createdAt: new Date().toISOString(),
+      title,
+      screenshotPath,
+      discoveredFields,
+      filledCount,
+      steps,
+      finalSubmitAttempted,
+      finalSubmitExecuted,
+    });
 
     await context.close();
 
@@ -229,9 +326,12 @@ export async function runApplyAgent(options: ApplyOptions): Promise<ApplyResult>
       mode: "playwright",
       title,
       screenshotPath,
+      artifactPath,
       discoveredFields,
       filledCount,
       steps,
+      finalSubmitAttempted,
+      finalSubmitExecuted,
     };
   } finally {
     await browser.close();

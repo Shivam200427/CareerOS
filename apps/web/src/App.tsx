@@ -44,12 +44,21 @@ type JobRecord = {
   summary: string;
   parsedSkills: string[];
   matchScore: number;
+  allowFinalSubmit?: boolean;
   retries: number;
   lastError?: string;
+  agentRun?: {
+    startedAt?: string;
+    finishedAt?: string;
+    durationMs?: number;
+  };
   agentResult?: {
     mode: "playwright" | "simulated";
     title?: string;
     screenshotPath?: string;
+    artifactPath?: string;
+    finalSubmitAttempted?: boolean;
+    finalSubmitExecuted?: boolean;
     discoveredFields?: Array<{
       selector: string;
       label: string;
@@ -63,6 +72,8 @@ type JobRecord = {
       value?: string;
       outcome: "ok" | "skipped" | "failed";
       note?: string;
+      startedAt?: string;
+      durationMs?: number;
     }>;
   };
   updatedAt: string;
@@ -359,6 +370,66 @@ function App() {
     }
   }
 
+  async function setSubmitMode(jobId: string, allowFinalSubmit: boolean) {
+    if (!headers) {
+      setError("Sign in first to change submit mode.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/${jobId}/submit-mode`, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ allowFinalSubmit }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update submit mode");
+      }
+
+      await fetchJobs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
+  async function downloadArtifact(jobId: string) {
+    if (!headers) {
+      setError("Sign in first to download artifacts.");
+      return;
+    }
+
+    setJobsBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/jobs/${jobId}/artifact`, { headers });
+      if (!response.ok) {
+        throw new Error("Artifact is not available yet");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${jobId}-run.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setJobsBusy(false);
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
@@ -492,6 +563,15 @@ function App() {
                       {typeof job.agentResult.filledCount === "number"
                         ? ` | Fields filled: ${job.agentResult.filledCount}`
                         : ""}
+                      {job.agentResult.finalSubmitAttempted
+                        ? ` | Submit: ${job.agentResult.finalSubmitExecuted ? "executed" : "attempt failed"}`
+                        : " | Submit: skipped"}
+                    </p>
+                  ) : null}
+                  {job.agentRun?.durationMs ? (
+                    <p>
+                      Run duration: {(job.agentRun.durationMs / 1000).toFixed(2)}s
+                      {job.agentRun.startedAt ? ` | Started: ${new Date(job.agentRun.startedAt).toLocaleTimeString()}` : ""}
                     </p>
                   ) : null}
                   {job.status === "awaiting_approval" ? (
@@ -506,6 +586,15 @@ function App() {
                   ) : null}
                   {job.status === "approved" ? (
                     <div className="actions">
+                      <label className="toggle-submit">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(job.allowFinalSubmit)}
+                          disabled={jobsBusy}
+                          onChange={(event) => setSubmitMode(job.id, event.target.checked)}
+                        />
+                        Allow final submit click
+                      </label>
                       <button disabled={jobsBusy} onClick={() => executeJob(job.id)}>
                         Execute Submit Stage
                       </button>
@@ -526,10 +615,18 @@ function App() {
                       {job.agentResult.steps.slice(0, 5).map((step, index) => (
                         <li key={`${job.id}-step-${index}`}>
                           <strong>{step.action}</strong> [{step.outcome}]
+                          {typeof step.durationMs === "number" ? ` (${step.durationMs}ms)` : ""}
                           {step.note ? ` - ${step.note}` : ""}
                         </li>
                       ))}
                     </ul>
+                  ) : null}
+                  {job.agentResult?.artifactPath ? (
+                    <div className="actions">
+                      <button className="secondary" disabled={jobsBusy} onClick={() => downloadArtifact(job.id)}>
+                        Download Run Artifact
+                      </button>
+                    </div>
                   ) : null}
                   <a href={job.url} target="_blank" rel="noreferrer" className="job-link">
                     Open listing

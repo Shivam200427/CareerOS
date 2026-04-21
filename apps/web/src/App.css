@@ -264,6 +264,18 @@ button:disabled {
   margin-top: 0.2rem;
 }
 
+.toggle-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: #3a2a12;
+}
+
+.toggle-submit input {
+  accent-color: #1e5631;
+}
+
 @media (max-width: 900px) {
   .panel-grid {
     grid-template-columns: 1fr;

@@ -7,11 +7,13 @@ import { requireAuth } from "./auth-middleware.js";
 import { getGoogleAuthCallback, getGoogleAuthStart, getMe, postDemoAuth } from "./auth.js";
 import { env } from "./env.js";
 import {
+  getJobArtifact,
   getDiscoverJobsPlaceholder,
   getJobs,
   postApproveJob,
   postExecuteJob,
   postManualJob,
+  postSetSubmitMode,
   postSkipJob,
 } from "./jobs.js";
 import { getResumes, postPinResume, postResumeUpload, resumeUploadMiddleware } from "./resume-vault.js";
@@ -41,6 +43,8 @@ app.post("/api/jobs/manual", requireAuth, postManualJob);
 app.post("/api/jobs/:jobId/approve", requireAuth, postApproveJob);
 app.post("/api/jobs/:jobId/execute", requireAuth, postExecuteJob);
 app.post("/api/jobs/:jobId/skip", requireAuth, postSkipJob);
+app.post("/api/jobs/:jobId/submit-mode", requireAuth, postSetSubmitMode);
+app.get("/api/jobs/:jobId/artifact", requireAuth, getJobArtifact);
 app.get("/api/jobs/discover", requireAuth, getDiscoverJobsPlaceholder);
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
