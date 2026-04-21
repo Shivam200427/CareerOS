@@ -50,6 +50,20 @@ type JobRecord = {
     mode: "playwright" | "simulated";
     title?: string;
     screenshotPath?: string;
+    discoveredFields?: Array<{
+      selector: string;
+      label: string;
+      type: string;
+      placeholder?: string;
+    }>;
+    filledCount?: number;
+    steps?: Array<{
+      action: string;
+      target?: string;
+      value?: string;
+      outcome: "ok" | "skipped" | "failed";
+      note?: string;
+    }>;
   };
   updatedAt: string;
 };
@@ -321,7 +335,7 @@ function App() {
   return (
     <main className="page">
       <section className="hero">
-        <p className="tag">CareerOS / Milestone C</p>
+        <p className="tag">CareerOS / Milestone D</p>
         <h1>JobAgent control room</h1>
         <p className="subtitle">
           Auth, Resume Vault, and manual URL queueing are live for the autonomous application
@@ -448,6 +462,9 @@ function App() {
                     <p>
                       Agent mode: {job.agentResult.mode}
                       {job.agentResult.title ? ` | Page: ${job.agentResult.title}` : ""}
+                      {typeof job.agentResult.filledCount === "number"
+                        ? ` | Fields filled: ${job.agentResult.filledCount}`
+                        : ""}
                     </p>
                   ) : null}
                   {job.status === "awaiting_approval" ? (
@@ -463,6 +480,22 @@ function App() {
                   {job.lastError ? <p className="error">Last error: {job.lastError}</p> : null}
                   {job.agentResult?.screenshotPath ? (
                     <p>Artifact: {job.agentResult.screenshotPath}</p>
+                  ) : null}
+                  {job.agentResult?.discoveredFields?.length ? (
+                    <p>
+                      Fields: {job.agentResult.discoveredFields.slice(0, 4).map((field) => field.label).join(", ")}
+                      {job.agentResult.discoveredFields.length > 4 ? " ..." : ""}
+                    </p>
+                  ) : null}
+                  {job.agentResult?.steps?.length ? (
+                    <ul className="step-list">
+                      {job.agentResult.steps.slice(0, 5).map((step, index) => (
+                        <li key={`${job.id}-step-${index}`}>
+                          <strong>{step.action}</strong> [{step.outcome}]
+                          {step.note ? ` - ${step.note}` : ""}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                   <a href={job.url} target="_blank" rel="noreferrer" className="job-link">
                     Open listing

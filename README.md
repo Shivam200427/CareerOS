@@ -86,7 +86,13 @@ Approval-gate statuses now include `awaiting_approval`, `approved`, `skipped`, a
 When a job is approved, the worker runs a submit-stage agent:
 
 - Simulated mode by default (writes JSON artifact)
-- Playwright mode when enabled (captures page title + screenshot)
+- Playwright mode when enabled (captures page title, discovered fields, fill attempts, and screenshot)
+
+Current submit behavior is intentionally safe:
+
+- The agent discovers and fills common text/select fields
+- Final submit click is still blocked in this phase
+- Execution steps are persisted and shown in the dashboard for auditability
 
 ## Scripts
 
@@ -97,7 +103,7 @@ When a job is approved, the worker runs a submit-stage agent:
 
 ## Next milestone
 
-Milestone D next step is expanding Playwright from page capture to full form interaction.
+Milestone D next step is controlled form submission behind an explicit final-confirm action.
 
 ## Playwright notes
 

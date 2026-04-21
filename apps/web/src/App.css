@@ -253,6 +253,17 @@ button:disabled {
   text-decoration: underline;
 }
 
+.step-list {
+  margin-top: 0.45rem;
+  margin-bottom: 0.2rem;
+  padding-left: 1rem;
+  font-size: 0.9rem;
+}
+
+.step-list li {
+  margin-top: 0.2rem;
+}
+
 @media (max-width: 900px) {
   .panel-grid {
     grid-template-columns: 1fr;

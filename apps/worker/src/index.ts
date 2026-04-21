@@ -25,6 +25,20 @@ type JobStore = {
       mode: "playwright" | "simulated";
       title?: string;
       screenshotPath?: string;
+      discoveredFields?: Array<{
+        selector: string;
+        label: string;
+        type: string;
+        placeholder?: string;
+      }>;
+      filledCount?: number;
+      steps?: Array<{
+        action: string;
+        target?: string;
+        value?: string;
+        outcome: "ok" | "skipped" | "failed";
+        note?: string;
+      }>;
     };
     updatedAt: string;
   }>;
