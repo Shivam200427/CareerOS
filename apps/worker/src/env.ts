@@ -1,7 +1,11 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-dotenv.config();
+const workerEnvPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.env");
+
+dotenv.config({ path: workerEnvPath });
 
 const workerEnvSchema = z.object({
   REDIS_URL: z.url().default("redis://localhost:6379"),

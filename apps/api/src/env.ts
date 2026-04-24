@@ -1,7 +1,11 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-dotenv.config();
+const apiEnvPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.env");
+
+dotenv.config({ path: apiEnvPath });
 
 const apiEnvSchema = z.object({
   API_PORT: z.coerce.number().default(4000),
